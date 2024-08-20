@@ -18,6 +18,8 @@ load_dotenv()
 
 # Retrieve the Discord token from the environment
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
+BEAR_TOKEN = os.getenv('BEAR_TOKEN')
+DW_TOKEN = os.getenv('DW_TOKEN')
 HOST_URL = os.getenv('HOST_URL')  # Add this to your .env file for API endpoint
 
 # Debug print to verify if the token is loaded
@@ -333,7 +335,8 @@ class DwCommands(app_commands.Group):
                 user = await bot.fetch_user(int(user_id))
                 username = user.name if user else f"User ID: {user_id}"
                 embed.add_field(name=username, value=epic_id, inline=False)
-                data_list.append({'Username': username, 'EpicID': epic_id, 'Points': ''})
+                # Prepare data for the CSV export with default values for Points, OilPoints, and EnergyPoints
+                data_list.append({'EpicID': epic_id, 'Points': 0, 'OilPoints': 0, 'EnergyPoints': 0})
 
             # Button to export the list to a CSV file
             export_button = Button(label="Export to CSV", style=discord.ButtonStyle.primary)
@@ -341,12 +344,16 @@ class DwCommands(app_commands.Group):
             # Callback function for exporting the list to CSV
             async def export_button_callback(button_interaction):
                 df = pd.DataFrame(data_list)
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp_file:
-                    temp_file_path = tmp_file.name
-                    df.to_csv(temp_file_path, index=False)
+                try:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp_file:
+                        temp_file_path = tmp_file.name
+                        df.to_csv(temp_file_path, index=False)
 
-                # Send the CSV file as a response
-                await button_interaction.response.send_message(file=discord.File(temp_file_path, filename="epic_ids_list.csv"), ephemeral=True)
+                    # Send the CSV file as a response
+                    await button_interaction.response.send_message(file=discord.File(temp_file_path, filename="epic_ids_list.csv"), ephemeral=True)
+                finally:
+                    # Clean up the temporary file
+                    os.remove(temp_file_path)
 
             export_button.callback = export_button_callback
 
@@ -373,11 +380,14 @@ class DwCommands(app_commands.Group):
             await interaction.response.send_message("No EPIC Account IDs have been set yet.", ephemeral=True)
 
     # Command to distribute DP based on a CSV file (Admin only)
-    @app_commands.command(name="distribute", description="Distribute DP based on a CSV file (Admin only)")
+    @app_commands.command(name="distribute", description="Distribute DP, Oil, and Energy based on a CSV file (Admin only)")
     async def dw_distribute(self, interaction: Interaction, file: discord.Attachment):
+        # Acknowledge the interaction immediately
+        await interaction.response.defer(ephemeral=True)
+
         # Check if the user has the Admin role
         if not is_admin(interaction):
-            await interaction.response.send_message("You do not have the necessary permissions to use this command.", ephemeral=True)
+            await interaction.followup.send("You do not have the necessary permissions to use this command.", ephemeral=True)
             return
 
         # If EPIC IDs are available, proceed with the distribution
@@ -393,44 +403,122 @@ class DwCommands(app_commands.Group):
             data.columns = data.columns.str.strip()
 
             # Ensure the CSV has the necessary columns
-            if "EpicID" not in data.columns or "Points" not in data.columns:
-                await interaction.response.send_message("The CSV file must contain 'EpicID' and 'Points' columns.", ephemeral=True)
+            required_columns = {"EpicID", "Points", "OilPoints", "EnergyPoints"}
+            if not required_columns.issubset(data.columns):
+                await interaction.followup.send("The CSV file must contain 'EpicID', 'Points', 'OilPoints', and 'EnergyPoints' columns.", ephemeral=True)
                 return
 
             # Normalize EPIC IDs for case-insensitive comparison
             data['EpicID'] = data['EpicID'].str.strip().str.lower()
             normalized_user_epic_ids = {k: v.strip().lower() for k, v in user_epic_ids.items()}
 
+            # Step 1: Check the Bot Bank Account Balance for DP, Oil, and Energy
+            balance_api_url = "https://api.helpers.testnet.thxnet.org/rest/v0.5/id_wallet/5DSFYPkB2b6auEwZxqbkAWa213EbBfDtRuaRrnivA3RvoMyg/testnet_leafchain_aether/fts"
+            balance_headers = {
+                "Authorization": f"Bearer {BEAR_TOKEN}"  # Replace with your actual bearer token
+            }
+
+            try:
+                balance_response = requests.get(balance_api_url, headers=balance_headers)
+                if balance_response.status_code == 200:
+                    balance_data = balance_response.json().get('result', {})
+                    dp_balance = next((item['balance'] for item in balance_data.get('non_native_ft_balances', []) if item['asset_id'] == 1), 0)
+                    oil_balance = next((item['balance'] for item in balance_data.get('non_native_ft_balances', []) if item['asset_id'] == 2), 0)  # Assuming 2 is for Oil
+                    energy_balance = next((item['balance'] for item in balance_data.get('non_native_ft_balances', []) if item['asset_id'] == 3), 0)  # Assuming 3 is for Energy
+
+                    if dp_balance <= 0 or oil_balance <= 0 or energy_balance <= 0:
+                        await interaction.followup.send("Insufficient balance in the Bot Bank Account for one or more resources.", ephemeral=True)
+                        return
+                else:
+                    await interaction.followup.send(f"Failed to check Bot Bank Account balance. API responded with status code: {balance_response.status_code}.", ephemeral=True)
+                    return
+            except Exception as e:
+                await interaction.followup.send(f"Failed to check Bot Bank Account balance. Error: {str(e)}", ephemeral=True)
+                return
+
             # Initialize a list to store results for reporting
             results = []
 
-            # Distribute points to users by sending a POST request to the API
+            # Step 2: Retrieve the id_wallet using EPIC-ID and distribute resources
             for _, row in data.iterrows():
                 epic_id = row['EpicID']
-                points = row['Points']
+                dp_points = row['Points']
+                oil_points = row['OilPoints']
+                energy_points = row['EnergyPoints']
+
+                # Ensure there is enough balance to distribute each resource
+                if dp_points > dp_balance or oil_points > oil_balance or energy_points > energy_balance:
+                    results.append(f"Not enough resources to distribute to {epic_id}. Remaining balances - DP: {dp_balance}, Oil: {oil_balance}, Energy: {energy_balance}.")
+                    continue
 
                 # Find the user associated with the EPIC ID
                 user_id = {v: k for k, v in normalized_user_epic_ids.items()}.get(epic_id)
 
                 if user_id:
-                    # Corrected API URL
-                    api_url = f"{HOST_URL}/api/distribute/dp/{epic_id}/{points}"
+                    # Retrieve id_wallet using EPIC-ID
+                    wallet_api_url = f"https://api.staging.deverse.world/api/authenticate/{epic_id}"
+                    wallet_headers = {
+                        "x-dw-api-key": f"{DW_TOKEN}"  # Replace with your actual Deverse World API key
+                    }
+
                     try:
-                        response = requests.post(api_url)
-                        if response.status_code == 200:
-                            results.append(f"Successfully distributed {points} DP to {epic_id} (User: {user_id}).")
+                        wallet_response = requests.get(wallet_api_url, headers=wallet_headers)
+                        if wallet_response.status_code in [200, 201]:  # Handle both 200 and 201 status codes
+                            # Extract the 'id_wallet' from the 'data' key in the response
+                            wallet_data = wallet_response.json().get('data', {})
+                            id_wallet = wallet_data.get('thx', {}).get('id_wallet')
+
+                            if not id_wallet:
+                                results.append(f"Failed to retrieve wallet for Epic ID {epic_id}. 'id_wallet' not found.")
+                                continue
                         else:
-                            results.append(f"Failed to distribute {points} DP to {epic_id} (User: {user_id}). API responded with status code: {response.status_code}.")
+                            results.append(f"Failed to retrieve wallet for Epic ID {epic_id}. API responded with status code: {wallet_response.status_code}. Response: {wallet_response.text}")
+                            continue
                     except Exception as e:
-                        results.append(f"Failed to distribute {points} DP to {epic_id} (User: {user_id}). Error: {str(e)}")
+                        results.append(f"Failed to retrieve wallet for Epic ID {epic_id}. Error: {str(e)}")
+                        continue
+
+                    # Step 3: Transfer resources
+                    def transfer_resource(resource_name, points, asset_id):
+                        if points > 0:
+                            transfer_api_url = "https://api.helpers.testnet.thxnet.org/rest/v0.5/me/testnet_leafchain_aether/ft/transfer"
+                            transfer_payload = {
+                                "receiver_id_wallet_address": id_wallet,
+                                "transfer_value_human": points,
+                                "native": False,
+                                "asset_id": asset_id
+                            }
+                            transfer_headers = {
+                                "Authorization": f"Bearer {BEAR_TOKEN}"  # Replace with your actual bearer token
+                            }
+
+                            try:
+                                transfer_response = requests.post(transfer_api_url, headers=transfer_headers, json=transfer_payload)
+                                if transfer_response.status_code == 200:
+                                    results.append(f"Successfully distributed {points} {resource_name} to {epic_id} (User: {user_id}).")
+                                    return points  # Return the points to decrement the balance
+                                else:
+                                    results.append(f"Failed to distribute {points} {resource_name} to {epic_id} (User: {user_id}). API responded with status code: {transfer_response.status_code}.")
+                                    return 0
+                            except Exception as e:
+                                results.append(f"Failed to distribute {points} {resource_name} to {epic_id} (User: {user_id}). Error: {str(e)}")
+                                return 0
+                        return 0
+
+                    # Transfer DP, Oil, and Energy
+                    dp_balance -= transfer_resource("DP", dp_points, 1)
+                    oil_balance -= transfer_resource("Oil", oil_points, 2)
+                    energy_balance -= transfer_resource("Energy", energy_points, 3)
+
                 else:
                     results.append(f"User with Epic ID {epic_id} not found in the server.")
 
             # Report the results of the distribution process
             result_message = "\n".join(results)
-            await interaction.response.send_message(f"Distribution process completed:\n{result_message}", ephemeral=True)
+            await interaction.followup.send(f"Distribution process completed:\n{result_message}", ephemeral=True)
         else:
-            await interaction.response.send_message("No EPIC Account IDs have been set yet.", ephemeral=True)
+            await interaction.followup.send("No EPIC Account IDs have been set yet.", ephemeral=True)
+
 
 # Register the command group with the bot
 bot.tree.add_command(DwCommands())
