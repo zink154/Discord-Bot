@@ -20,7 +20,6 @@ load_dotenv()
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 BEAR_TOKEN = os.getenv('BEAR_TOKEN')
 DW_TOKEN = os.getenv('DW_TOKEN')
-HOST_URL = os.getenv('HOST_URL')  # Add this to your .env file for API endpoint
 
 # Debug print to verify if the token is loaded
 print(f"Token loaded: {DISCORD_TOKEN}")
