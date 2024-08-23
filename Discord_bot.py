@@ -57,7 +57,7 @@ def save_epic_ids():
 user_epic_ids = load_epic_ids()  # Loads the EPIC IDs from the JSON file at startup
 
 # Admin role name
-admin_role_name = "Admin"  # Sets the name of the admin role that has special permissions
+admin_role_name = "Admins"  # Sets the name of the admin role that has special permissions
 
 # Function to check if the user has the Admin role
 def is_admin(interaction: discord.Interaction):
