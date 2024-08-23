@@ -143,6 +143,30 @@ class DwCommands(app_commands.Group):
     def __init__(self):
         super().__init__(name="dw-commands", description="Commands for managing EPIC IDs and game info")  # Initializes the command group
 
+    # Help command within the dw-commands group
+    @app_commands.command(name="help", description="Displays information on how to use the dw-commands and their descriptions.")
+    async def dw_help(self, interaction: discord.Interaction):
+        # Create an embed for the help message
+        embed = discord.Embed(title="Help - DW Commands", color=discord.Color.blue())
+        
+        # Check if the bot has an avatar and set it as the thumbnail if it does
+        if bot.user.avatar:
+            embed.set_thumbnail(url=bot.user.avatar.url)
+        
+        # Add a field for each command and its description
+        embed.add_field(name="/dw-commands set", value="Set your EPIC Account ID. Follow the instructions provided after using the command.", inline=False)
+        embed.add_field(name="/dw-commands view", value="View your EPIC Account ID and wallet balances (DP, Oil, Energy).", inline=False)
+        embed.add_field(name="/dw-commands edit", value="Edit your existing EPIC Account ID.", inline=False)
+        embed.add_field(name="/dw-commands list (Admin only)", value="List all EPIC Account IDs registered with the bot. Admins can also export this list.", inline=False)
+        embed.add_field(name="/dw-commands distribute (Admin only)", value="Distribute DP, Oil, and Energy to users.", inline=False)
+        
+        embed.add_field(name="Example Commands", value="• Use `/dw-commands set` to set your EPIC Account ID.\n• Use `/dw-commands view` to view your account info.", inline=False)
+        
+        embed.set_footer(text="For more help, contact an Admin or open a ticket in #ticketing channel.")
+        
+        # Send the help embed to the user
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
     # Command to set the EPIC Account ID
     @app_commands.command(name="set", description="Set your EPIC Account ID")
     async def dw_set(self, interaction: discord.Interaction):
