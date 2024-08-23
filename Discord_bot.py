@@ -236,25 +236,37 @@ class DwCommands(app_commands.Group):
 
         id_wallet, error = get_wallet_by_epic_id(epic_id)  # Retrieve the wallet ID using the EPIC ID
         if not id_wallet:
-            await interaction.followup.send(f"Failed to retrieve wallet. {error}", ephemeral=True)
-            return  # Notify the user if the wallet retrieval fails
+            # If wallet retrieval fails, explicitly set balances to None
+            dp_balance = None
+            oil_balance = None
+            energy_balance = None
 
-        balance_data, error = get_wallet_balance(id_wallet)  # Retrieve the wallet balance using the wallet ID
-        if error:
-            await interaction.followup.send(f"Failed to retrieve balance. {error}", ephemeral=True)
-            return  # Notify the user if the balance retrieval fails
+            # Notify the user of the failure and include their Discord name and EPIC Account ID
+            await interaction.followup.send(
+                f"Failed to retrieve wallet for {interaction.user.name} (EPIC Account ID: {epic_id}). {error}", 
+                ephemeral=True
+            )
+        else:
+            # Retrieve the wallet balances if wallet retrieval was successful
+            balance_data, error = get_wallet_balance(id_wallet)
+            if error:
+                dp_balance = None
+                oil_balance = None
+                energy_balance = None
 
-        dp_balance = next((item['balance'] for item in balance_data.get('non_native_ft_balances', []) if item['asset_id'] == 1), 0)
-        oil_balance = next((item['balance'] for item in balance_data.get('non_native_ft_balances', []) if item['asset_id'] == 2), 0)
-        energy_balance = next((item['balance'] for item in balance_data.get('non_native_ft_balances', []) if item['asset_id'] == 3), 0)
+                await interaction.followup.send(f"Failed to retrieve balance. {error}", ephemeral=True)
+            else:
+                dp_balance = next((item['balance'] for item in balance_data.get('non_native_ft_balances', []) if item['asset_id'] == 1), 0)
+                oil_balance = next((item['balance'] for item in balance_data.get('non_native_ft_balances', []) if item['asset_id'] == 2), 0)
+                energy_balance = next((item['balance'] for item in balance_data.get('non_native_ft_balances', []) if item['asset_id'] == 3), 0)
 
         embed = discord.Embed(title="Your Account Information", color=discord.Color.blue())  # Create an embed for displaying account information
         embed.add_field(name="Discord Name", value=interaction.user.name, inline=True)  # Add the user's Discord name to the embed
         embed.add_field(name="EPIC Account ID", value=epic_id, inline=True)  # Add the EPIC ID to the embed
-        embed.add_field(name="Wallet ID", value=f"{id_wallet}", inline=False)  # Add the wallet ID to the embed
-        embed.add_field(name="DP", value=f"{dp_balance}", inline=True)  # Add the DP balance to the embed
-        embed.add_field(name="Oil", value=f"{oil_balance}", inline=True)  # Add the oil balance to the embed
-        embed.add_field(name="Energy", value=f"{energy_balance}", inline=True)  # Add the energy balance to the embed
+        embed.add_field(name="Wallet ID", value=f"{id_wallet}" if id_wallet else "None", inline=False)  # Add the wallet ID or "None" to the embed
+        embed.add_field(name="DP", value=f"{dp_balance}" if dp_balance is not None else "None", inline=True)  # Add the DP balance or "None" to the embed
+        embed.add_field(name="Oil", value=f"{oil_balance}" if oil_balance is not None else "None", inline=True)  # Add the oil balance or "None" to the embed
+        embed.add_field(name="Energy", value=f"{energy_balance}" if energy_balance is not None else "None", inline=True)  # Add the energy balance or "None" to the embed
         embed.set_thumbnail(url=interaction.user.avatar.url)  # Set the user's avatar as the thumbnail in the embed
 
         await interaction.followup.send(embed=embed, ephemeral=True)  # Send the embed as a response
@@ -319,10 +331,21 @@ class DwCommands(app_commands.Group):
         button = Button(label="Edit EPIC Account ID", style=discord.ButtonStyle.primary)  # Create a button to edit the EPIC ID
         button.callback = button_callback  # Set the callback function for the button
 
+        # Close button callback
+        async def close_button_callback(button_interaction):
+            try:
+                await interaction.delete_original_response()  # Delete the original interaction response
+            except discord.errors.NotFound:
+                await button_interaction.response.send_message("Message already deleted.", ephemeral=True)  # Notify the user if the message was already deleted
+
+        close_button = Button(label="Close", style=discord.ButtonStyle.danger)  # Create a close button
+        close_button.callback = close_button_callback  # Set the callback function for the close button
+
         view = View()  # Create a view to hold the buttons
         view.add_item(button)  # Add the edit button to the view
+        view.add_item(close_button)  # Add the close button to the view
 
-        await interaction.response.send_message(EPIC_ID_EDIT_MSG, view=view, ephemeral=True)  # Send the message with the button
+        await interaction.response.send_message(EPIC_ID_EDIT_MSG, view=view, ephemeral=True)  # Send the message with the buttons
 
     # Command to list all EPIC Account IDs (Admin only)
     @app_commands.command(name="list", description="List all EPIC Account IDs (Admin only)")
