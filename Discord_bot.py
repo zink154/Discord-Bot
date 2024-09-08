@@ -78,9 +78,14 @@ EPIC_ID_SET_MSG = "Click the button below to set your EPIC Account ID."
 EPIC_ID_EDIT_MSG = "Click the button below to edit your EPIC Account ID."
 COOLDOWN_TIME = 10  # Cooldown time in seconds to prevent spamming
 
+# Get the URL from the environment variable
+api_url_base = os.getenv("API_URL")
+base_api_url = os.getenv("BALANCE_API_URL")
+chain_info = "testnet_leafchain_aether/fts"
+
 # Function to make an API call to retrieve the wallet using the EPIC ID
 def get_wallet_by_epic_id(epic_id):
-    wallet_api_url = f"https://api.deverse.world/api/authenticate/p-{epic_id}"
+    wallet_api_url = f"{api_url_base}{epic_id}"
     wallet_headers = {"x-dw-api-key": f"{DW_TOKEN}"}
     
     try:
@@ -99,9 +104,9 @@ def get_wallet_by_epic_id(epic_id):
 
 # Function to retrieve the balance of a wallet using its id_wallet
 def get_wallet_balance(id_wallet):
-    balance_api_url = f"https://api.helpers.testnet.thxnet.org/rest/v0.5/id_wallet/{id_wallet}/testnet_leafchain_aether/fts"
+    balance_api_url = f"{base_api_url}{id_wallet}/{chain_info}"
     balance_headers = {"Authorization": f"Bearer {BEAR_TOKEN}"}
-    
+
     try:
         balance_response = requests.get(balance_api_url, headers=balance_headers)
         if balance_response.status_code == 200:
@@ -114,7 +119,7 @@ def get_wallet_balance(id_wallet):
 
 # Function to transfer resources to a wallet
 def transfer_resource(id_wallet, points, asset_id):
-    transfer_api_url = "https://api.helpers.testnet.thxnet.org/rest/v0.5/me/testnet_leafchain_aether/ft/transfer"
+    transfer_api_url = os.getenv("TRANSFER_API_URL")
     transfer_payload = {
         "receiver_id_wallet_address": id_wallet,
         "transfer_value_human": points,
