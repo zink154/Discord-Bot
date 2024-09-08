@@ -371,6 +371,48 @@ class DwCommands(app_commands.Group):
 
         await interaction.response.send_message(EPIC_ID_EDIT_MSG, view=view, ephemeral=True)  # Send the message with the buttons
 
+    # Command to remove the EPIC Account ID
+    @app_commands.command(name="remove", description="Remove your EPIC Account ID")
+    async def dw_remove(self, interaction: discord.Interaction):
+        user_id = str(interaction.user.id)  # Get the user's Discord ID as a string
+
+        # Check if the user has an EPIC Account ID
+        if user_id not in user_epic_ids:
+            await interaction.response.send_message("You don't have an EPIC Account ID set.", ephemeral=True)
+            return  # If the user doesn't have an EPIC ID, notify them and exit
+
+        # Confirmation button interaction
+        async def confirm_button_callback(button_interaction):
+            if button_interaction.user.id != int(user_id):
+                await button_interaction.response.send_message("You are not authorized to use this button.", ephemeral=True)
+                return  # Ensure the button interaction is authorized
+
+            del user_epic_ids[user_id]  # Remove the EPIC ID from the dictionary
+            save_epic_ids()  # Save the updated EPIC IDs to the JSON file
+
+            await button_interaction.response.send_message("Your EPIC Account ID has been removed.", ephemeral=True)
+            await interaction.channel.send(f"{button_interaction.user.mention} has successfully removed their EPIC Account ID.")
+            await interaction.delete_original_response()  # Delete the original interaction response
+
+        confirm_button = Button(label="Confirm", style=discord.ButtonStyle.danger)  # Create a confirm button
+        confirm_button.callback = confirm_button_callback  # Set the callback for the button
+
+        close_button = Button(label="Cancel", style=discord.ButtonStyle.secondary)  # Create a close button
+
+        async def close_button_callback(button_interaction):
+            try:
+                await interaction.delete_original_response()  # Delete the original interaction response
+            except discord.errors.NotFound:
+                await button_interaction.response.send_message("Message already deleted.", ephemeral=True)  # Notify the user if the message was already deleted
+
+        close_button.callback = close_button_callback  # Set the callback for the close button
+
+        view = View()  # Create a view to hold the buttons
+        view.add_item(confirm_button)  # Add the confirm button
+        view.add_item(close_button)  # Add the close button
+
+        await interaction.response.send_message("Are you sure you want to remove your EPIC Account ID?", view=view, ephemeral=True)
+
     # Command to list all EPIC Account IDs (Admin only)
     @app_commands.command(name="list", description="List all EPIC Account IDs (Admin only)")
     async def dw_list(self, interaction: discord.Interaction):
