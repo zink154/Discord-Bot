@@ -24,7 +24,7 @@ DW_TOKEN = os.getenv('DW_TOKEN')  # Gets the Deverse World API key from the envi
 if DISCORD_TOKEN is None:
     raise ValueError("Discord token not found. Please check your .env file.")  # Raises an error if the token is not found
 
-# Set up intents
+# Set up intentsf
 intents = discord.Intents.default()  # Creates a default set of intents for the bot
 intents.messages = True  # Allows the bot to receive messages
 intents.message_content = True  # Allows the bot to read the content of the messages
@@ -80,7 +80,7 @@ COOLDOWN_TIME = 10  # Cooldown time in seconds to prevent spamming
 
 # Function to make an API call to retrieve the wallet using the EPIC ID
 def get_wallet_by_epic_id(epic_id):
-    wallet_api_url = f"https://api.staging.deverse.world/api/authenticate/{epic_id}"
+    wallet_api_url = f"https://api.deverse.world/api/authenticate/p-{epic_id}"
     wallet_headers = {"x-dw-api-key": f"{DW_TOKEN}"}
     
     try:
