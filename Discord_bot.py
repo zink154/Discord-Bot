@@ -154,9 +154,11 @@ class DwCommands(app_commands.Group):
             embed.set_thumbnail(url=bot.user.avatar.url)
         
         # Add a field for each command and its description
+        embed.add_field(name="/dw-commands gameinfo", value="Show information about Deverse World.", inline=False)
         embed.add_field(name="/dw-commands set", value="Set your EPIC Account ID. Follow the instructions provided after using the command.", inline=False)
         embed.add_field(name="/dw-commands view", value="View your EPIC Account ID and wallet balances (DP, Oil, Energy).", inline=False)
         embed.add_field(name="/dw-commands edit", value="Edit your existing EPIC Account ID.", inline=False)
+        embed.add_field(name="/dw-commands remove", value="Remove your existing EPIC Account ID.", inline=False)
         embed.add_field(name="/dw-commands list (Admin only)", value="List all EPIC Account IDs registered with the bot. Admins can also export this list.", inline=False)
         embed.add_field(name="/dw-commands distribute (Admin only)", value="Distribute DP, Oil, and Energy to users.", inline=False)
         
@@ -165,6 +167,47 @@ class DwCommands(app_commands.Group):
         embed.set_footer(text="For more help, contact an Admin or open a ticket in #ticketing channel.")
         
         # Send the help embed to the user
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # Command to display game information for Deverse World: Season 0
+    @app_commands.command(name="gameinfo", description="Show information about Deverse World: Season 0")
+    async def dw_gameinfo(self, interaction: discord.Interaction):
+        # Manually create the game information
+        game_title = "Deverse World: Season 0"
+        game_url = "https://store.epicgames.com/en-US/p/deverse-world-deverse-world-season-0-a9c70e"
+        website_url = "https://www.deverse.world"
+        description = (
+             "**Season 0 - The Opening of a New World**\n\n"
+            "Embark on the **first-ever season** of Deverse World, where you'll defend against countless raiders and "
+            "go on a thrilling streak of raiding endless bases for resources. Climb your way up the global "
+            "leaderboard as you conquer challenges and claim your place among the top players.\n\n"
+            "Players must **register on our website** to access the game!"
+        )
+        features = (
+            "- **Explore Procedural Isles**: Discover unique floating isles with varied biomes and weather.\n"
+            "- **Build Your Base**: Defend your Core using turrets, traps, and more.\n"
+            "- **PvP Raids**: Raid enemy bases or defend your own in asynchronous PvP.\n"
+            "- **PvE Adventures**: Explore ever-shifting isles and face new challenges.\n"
+            "- **Climb Leaderboards**: Strategize to increase valuation and rank globally.\n"
+            "- **Solo/Coop Raiding**: Raid solo or with friends for valuable loot.\n"
+        )
+        platform = "Available on Epic Games Store"
+        release_date = "Season 0 is live now!"
+        
+        # Create an embed for a better visual presentation
+        embed = discord.Embed(title=game_title, description=description, color=discord.Color.blue())
+        
+        # Add fields for additional details
+        embed.add_field(name="Features", value=features, inline=False)
+        embed.add_field(name="Epic Games", value=f"[Click here]({game_url})", inline=False)
+        embed.add_field(name="Website", value=f"[Click here]({website_url})", inline=False)
+        embed.add_field(name="Platform", value=platform, inline=True)
+        embed.add_field(name="Release Date", value=release_date, inline=True)
+        
+        # Set the thumbnail or image (optional) and a footer with the game URL
+        embed.set_thumbnail(url="https://cdn1.epicgames.com/spt-assets/aae23250026048229c4c441c1f6eae00/deverse-world-rqxcj.jpg?h=270&quality=medium&resize=1&w=480")  # Example image URL
+
+        # Send the embed as a response
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # Command to set the EPIC Account ID
